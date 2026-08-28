@@ -6,6 +6,7 @@ import lombok.*;
 import java.util.List;
 
 @Entity
+@Table(name = "app_user")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,5 +27,6 @@ public class User {
     private boolean hasKids;
 
     @ElementCollection
+    @CollectionTable(name = "user_kids", joinColumns = @JoinColumn(name = "user_cpf"))
     private List<String> kids;
 }

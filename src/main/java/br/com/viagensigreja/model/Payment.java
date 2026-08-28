@@ -23,6 +23,6 @@ public class Payment {
     private boolean locked;
 
     @Lob
-    @Column(columnDefinition = "LONGTEXT")
+    @Column(columnDefinition = "TEXT")
     private String receiptsJson;
 }

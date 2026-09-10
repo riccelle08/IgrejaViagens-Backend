@@ -5,8 +5,17 @@ import br.com.viagensigreja.dto.UserResponseDTO;
 import br.com.viagensigreja.mapper.UserMapper;
 import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,22 +25,61 @@ public class AuthController {
 
     private final AuthService service;
     private final UserMapper userMapper;
+    private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 
-    public AuthController(AuthService service, UserMapper userMapper) {
+    public AuthController(
+            AuthService service,
+            UserMapper userMapper,
+            SecurityContextRepository securityContextRepository,
+            SessionAuthenticationStrategy sessionAuthenticationStrategy
+    ) {
         this.service = service;
         this.userMapper = userMapper;
+        this.securityContextRepository = securityContextRepository;
+        this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginDTO dto) {
-        User user = service.login(dto);
+    public ResponseEntity<?> login(
+            @RequestBody LoginDTO dto,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        try {
+            Authentication authentication = service.authenticate(dto);
+            User user = service.findAuthenticatedUser(authentication);
 
+            if (user == null) {
+                throw new AuthenticationServiceException("Usuário autenticado não encontrado.");
+            }
+
+            sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+
+            SecurityContext context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            securityContextRepository.saveContext(context, request, response);
+
+            UserResponseDTO responseBody = userMapper.toResponse(user);
+            return ResponseEntity.ok(responseBody);
+        } catch (AuthenticationException exception) {
+            return unauthorized();
+        }
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> me(Authentication authentication) {
+        User user = service.findAuthenticatedUser(authentication);
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("CPF ou senha incorretos.");
+            return unauthorized();
         }
 
-        UserResponseDTO response = userMapper.toResponse(user);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(userMapper.toResponse(user));
+    }
+
+    private ResponseEntity<String> unauthorized() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("CPF ou senha incorretos.");
     }
 }

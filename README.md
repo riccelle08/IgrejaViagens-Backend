@@ -35,3 +35,17 @@ DB_NAME=igreja_viagens
 DB_USERNAME=igreja
 DB_PASSWORD=igreja
 ```
+
+## Seguranca: pendencias da autenticacao por sessao
+
+A API exige uma sessao autenticada, mas ainda existem duas protecoes pendentes:
+
+- autorizacao detalhada por perfil: nesta fase, `ADMIN` e `TRAVELER` autenticados
+  ainda possuem o mesmo acesso aos endpoints;
+- CSRF: a protecao esta temporariamente desabilitada porque o React atual nao
+  envia o token nas operacoes de escrita.
+
+O fluxo atual pressupoe frontend e backend na mesma origem (incluindo o proxy do
+Vite). Em producao HTTPS, configure `SESSION_COOKIE_SECURE=true`. Uma implantacao
+com origens diferentes tambem exigira CORS com credenciais e `credentials` no
+cliente React.

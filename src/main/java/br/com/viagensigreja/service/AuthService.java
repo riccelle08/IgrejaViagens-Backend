@@ -3,29 +3,34 @@ package br.com.viagensigreja.service;
 import br.com.viagensigreja.dto.LoginDTO;
 import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.repository.UserRepository;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AuthService {
 
     private final UserRepository repository;
-    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
 
-    public AuthService(UserRepository repository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository repository, AuthenticationManager authenticationManager) {
         this.repository = repository;
-        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
     }
 
-    public User login(LoginDTO dto) {
+    public Authentication authenticate(LoginDTO dto) {
         String cpfLimpo = dto.getCpf() == null ? "" : dto.getCpf().replaceAll("\\D", "");
+        UsernamePasswordAuthenticationToken credentials =
+                UsernamePasswordAuthenticationToken.unauthenticated(cpfLimpo, dto.getPassword());
+        return authenticationManager.authenticate(credentials);
+    }
 
-        User user = repository.findById(cpfLimpo).orElse(null);
-
-        if (user != null && passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
-            return user;
+    public User findAuthenticatedUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
         }
 
-        return null;
+        return repository.findById(authentication.getName()).orElse(null);
     }
 }

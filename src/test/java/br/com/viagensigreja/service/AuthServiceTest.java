@@ -3,16 +3,23 @@ package br.com.viagensigreja.service;
 import br.com.viagensigreja.dto.LoginDTO;
 import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.repository.UserRepository;
+import br.com.viagensigreja.security.DatabaseUserDetailsService;
 import br.com.viagensigreja.security.LegacyCompatiblePasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -29,7 +36,11 @@ class AuthServiceTest {
     void setUp() {
         repository = mock(UserRepository.class);
         passwordEncoder = new LegacyCompatiblePasswordEncoder();
-        service = new AuthService(repository, passwordEncoder);
+        DatabaseUserDetailsService userDetailsService = new DatabaseUserDetailsService(repository);
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        AuthenticationManager authenticationManager = new ProviderManager(provider);
+        service = new AuthService(repository, authenticationManager);
     }
 
     @Test
@@ -37,9 +48,10 @@ class AuthServiceTest {
         User user = usuarioComSenha("senha-legada");
         when(repository.findById("52998224725")).thenReturn(Optional.of(user));
 
-        User autenticado = service.login(login("529.982.247-25", "senha-legada"));
+        Authentication autenticacao = service.authenticate(login("529.982.247-25", "senha-legada"));
 
-        assertSame(user, autenticado);
+        assertTrue(autenticacao.isAuthenticated());
+        assertEquals("52998224725", autenticacao.getName());
         verify(repository, never()).save(any(User.class));
     }
 
@@ -48,9 +60,10 @@ class AuthServiceTest {
         User user = usuarioComSenha(passwordEncoder.encode("senha-segura"));
         when(repository.findById("52998224725")).thenReturn(Optional.of(user));
 
-        User autenticado = service.login(login("52998224725", "senha-segura"));
+        Authentication autenticacao = service.authenticate(login("52998224725", "senha-segura"));
 
-        assertSame(user, autenticado);
+        assertTrue(autenticacao.isAuthenticated());
+        assertEquals("52998224725", autenticacao.getName());
     }
 
     @Test
@@ -58,9 +71,10 @@ class AuthServiceTest {
         User user = usuarioComSenha(passwordEncoder.encode("senha-correta"));
         when(repository.findById("52998224725")).thenReturn(Optional.of(user));
 
-        User autenticado = service.login(login("52998224725", "senha-incorreta"));
-
-        assertNull(autenticado);
+        assertThrows(
+                BadCredentialsException.class,
+                () -> service.authenticate(login("52998224725", "senha-incorreta"))
+        );
     }
 
     private LoginDTO login(String cpf, String password) {

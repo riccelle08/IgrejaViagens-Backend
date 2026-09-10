@@ -1,5 +1,7 @@
 package br.com.viagensigreja.controller;
 
+import br.com.viagensigreja.dto.UserResponseDTO;
+import br.com.viagensigreja.mapper.UserMapper;
 import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.repository.UserRepository;
 import br.com.viagensigreja.service.UserService;
@@ -14,39 +16,41 @@ public class UserController {
 
     private final UserService service;
     private final UserRepository repository;
+    private final UserMapper userMapper;
 
-    public UserController(UserService service, UserRepository repository) {
+    public UserController(UserService service, UserRepository repository, UserMapper userMapper) {
         this.service = service;
         this.repository = repository;
+        this.userMapper = userMapper;
     }
 
     @GetMapping
-    public List<User> listar() {
-        return service.listar();
+    public List<UserResponseDTO> listar() {
+        return userMapper.toResponseList(service.listar());
     }
 
     @GetMapping("/{cpf}")
-    public User buscar(@PathVariable String cpf) {
-        return service.buscarPorCpf(cpf.replaceAll("\\D", ""));
+    public UserResponseDTO buscar(@PathVariable String cpf) {
+        return userMapper.toResponse(service.buscarPorCpf(cpf.replaceAll("\\D", "")));
     }
 
     @PostMapping
-    public User criar(@RequestBody User user) {
+    public UserResponseDTO criar(@RequestBody User user) {
         user.setCpf(user.getCpf().replaceAll("\\D", ""));
-        return service.salvar(user);
+        return userMapper.toResponse(service.salvar(user));
     }
 
     @PutMapping("/{cpf}")
-    public User atualizar(@PathVariable String cpf, @RequestBody User user) {
-        user.setCpf(cpf.replaceAll("\\D", ""));
-        return service.salvar(user);
+    public UserResponseDTO atualizar(@PathVariable String cpf, @RequestBody User user) {
+        String cpfLimpo = cpf.replaceAll("\\D", "");
+        return userMapper.toResponse(service.atualizar(cpfLimpo, user));
     }
 
     @PutMapping("/bulk")
-    public List<User> substituirTodos(@RequestBody List<User> users) {
+    public List<UserResponseDTO> substituirTodos(@RequestBody List<User> users) {
         repository.deleteAll();
         users.forEach(u -> u.setCpf(u.getCpf().replaceAll("\\D", "")));
-        return repository.saveAll(users);
+        return userMapper.toResponseList(repository.saveAll(users));
     }
 
     @DeleteMapping("/{cpf}")

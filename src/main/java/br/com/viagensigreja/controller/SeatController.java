@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/seats")
-@CrossOrigin
 public class SeatController {
 
     private final SeatService service;

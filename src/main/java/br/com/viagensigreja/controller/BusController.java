@@ -8,7 +8,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/buses")
-@CrossOrigin
 public class BusController {
 
     private final BusService service;

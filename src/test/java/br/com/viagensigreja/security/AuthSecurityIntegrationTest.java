@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppC
 class AuthSecurityIntegrationTest {
 
     private static final String CPF = "52998224725";
+    private static final String FRONTEND_ORIGIN = "http://localhost:5173";
 
     @Autowired
     private WebApplicationContext applicationContext;
@@ -153,6 +156,41 @@ class AuthSecurityIntegrationTest {
 
         mockMvc.perform(get("/trips").session(session))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void corsPermiteOrigemLocalComCredenciaisSemWildcard() throws Exception {
+        mockMvc.perform(options("/auth/me")
+                        .header("Origin", FRONTEND_ORIGIN)
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", FRONTEND_ORIGIN))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    void corsRejeitaOrigemNaoPermitida() throws Exception {
+        mockMvc.perform(options("/auth/me")
+                        .header("Origin", "http://example.invalid")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    void authMeComSessaoRetornaCabecalhosCorsParaOrigemPermitida() throws Exception {
+        salvarUsuario(passwordEncoder.encode("senha-segura"));
+        MockHttpSession session = sessionFrom(
+                autenticar("senha-segura").andReturn()
+        );
+
+        mockMvc.perform(get("/auth/me")
+                        .session(session)
+                        .header("Origin", FRONTEND_ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", FRONTEND_ORIGIN))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"))
+                .andExpect(jsonPath("$.password").doesNotExist());
     }
 
     private org.springframework.test.web.servlet.ResultActions autenticar(String password) throws Exception {

@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/trips")
-@CrossOrigin
 public class TripController {
 
     private final TripService service;

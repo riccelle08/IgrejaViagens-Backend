@@ -2,6 +2,7 @@ package br.com.viagensigreja.controller;
 
 import br.com.viagensigreja.mapper.UserMapper;
 import br.com.viagensigreja.model.User;
+import br.com.viagensigreja.security.ResourceAuthorizationService;
 import br.com.viagensigreja.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,11 @@ class UserControllerTest {
     @BeforeEach
     void setUp() {
         userService = mock(UserService.class);
-        UserController controller = new UserController(userService, new UserMapper());
+        UserController controller = new UserController(
+                userService,
+                new UserMapper(),
+                mock(ResourceAuthorizationService.class)
+        );
         mockMvc = standaloneSetup(controller).build();
     }
 

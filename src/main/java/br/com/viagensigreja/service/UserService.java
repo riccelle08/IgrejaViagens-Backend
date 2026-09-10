@@ -3,8 +3,10 @@ package br.com.viagensigreja.service;
 import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +44,32 @@ public class UserService {
         }
 
         return repository.save(novosDados);
+    }
+
+    @Transactional
+    public User concluirPrimeiroAcesso(String cpf, String novaSenha) {
+        User existente = repository.findById(cpf)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "UsuÃ¡rio nÃ£o encontrado."
+                ));
+
+        if (!existente.isFirstLogin()) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "O primeiro acesso deste usuÃ¡rio jÃ¡ foi concluÃ­do."
+            );
+        }
+        if (novaSenha == null || novaSenha.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A nova senha Ã© obrigatÃ³ria."
+            );
+        }
+
+        existente.setPassword(passwordEncoder.encode(novaSenha));
+        existente.setFirstLogin(false);
+        return repository.save(existente);
     }
 
     @Transactional

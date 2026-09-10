@@ -1,6 +1,8 @@
 package br.com.viagensigreja.security;
 
 import br.com.viagensigreja.model.User;
+import br.com.viagensigreja.model.Trip;
+import br.com.viagensigreja.repository.TripRepository;
 import br.com.viagensigreja.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +49,9 @@ class AuthSecurityIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private TripRepository tripRepository;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -55,11 +60,13 @@ class AuthSecurityIntegrationTest {
                 .apply(springSecurity())
                 .build();
         userRepository.deleteAll();
+        tripRepository.deleteAll();
     }
 
     @AfterEach
     void tearDown() {
         userRepository.deleteAll();
+        tripRepository.deleteAll();
     }
 
     @Test
@@ -148,14 +155,21 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
-    void usuarioAutenticadoAcessaEndpointProtegidoSemRegraDePapel() throws Exception {
+    void travelerAutenticadoAcessaViagemAssociada() throws Exception {
         salvarUsuario(passwordEncoder.encode("senha-segura"));
+        Trip trip = new Trip();
+        trip.setId("trip-1");
+        trip.setName("Viagem do viajante");
+        trip.setTravelersJson("[\"" + CPF + "\"]");
+        tripRepository.saveAndFlush(trip);
         MockHttpSession session = sessionFrom(
                 autenticar("senha-segura").andReturn()
         );
 
         mockMvc.perform(get("/trips").session(session))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("trip-1"))
+                .andExpect(jsonPath("$[0].travelersJson").value("[\"" + CPF + "\"]"));
     }
 
     @Test

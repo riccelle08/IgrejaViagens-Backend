@@ -2,7 +2,10 @@ package br.com.viagensigreja.controller;
 
 import br.com.viagensigreja.model.Seat;
 import br.com.viagensigreja.repository.SeatRepository;
+import br.com.viagensigreja.security.ResourceAuthorizationService;
 import br.com.viagensigreja.service.SeatService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,23 +16,41 @@ public class SeatController {
 
     private final SeatService service;
     private final SeatRepository repository;
+    private final ResourceAuthorizationService authorization;
 
-    public SeatController(SeatService service, SeatRepository repository) {
+    public SeatController(
+            SeatService service,
+            SeatRepository repository,
+            ResourceAuthorizationService authorization
+    ) {
         this.service = service;
         this.repository = repository;
+        this.authorization = authorization;
     }
 
     @GetMapping
-    public List<Seat> listar() {
-        return repository.findAll();
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Seat> listar(Authentication authentication) {
+        if (authorization.isAdmin(authentication)) {
+            return repository.findAll();
+        }
+
+        String cpf = authorization.authenticatedCpf(authentication);
+        var tripIds = authorization.accessibleTripIds(authentication);
+        return repository.findAll().stream()
+                .filter(seat -> authorization.belongsTo(seat.getUserCpf(), cpf))
+                .filter(seat -> tripIds.contains(seat.getTripId()))
+                .toList();
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public Seat criar(@RequestBody Seat seat) {
         return service.salvar(seat);
     }
 
     @PutMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<Seat> substituirTodos(@RequestBody List<Seat> seats) {
         repository.deleteAll();
         seats.forEach(s -> {
@@ -41,12 +62,32 @@ public class SeatController {
     }
 
     @GetMapping("/trip/{tripId}")
-    public List<Seat> listarPorViagem(@PathVariable String tripId) {
-        return service.buscarPorTrip(tripId);
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Seat> listarPorViagem(
+            @PathVariable String tripId,
+            Authentication authentication
+    ) {
+        if (authorization.isAdmin(authentication)) {
+            return service.buscarPorTrip(tripId);
+        }
+
+        authorization.requireTripAccess(authentication, tripId);
+        String cpf = authorization.authenticatedCpf(authentication);
+        return service.buscarPorTrip(tripId).stream()
+                .filter(seat -> authorization.belongsTo(seat.getUserCpf(), cpf))
+                .toList();
     }
 
     @GetMapping("/user/{cpf}")
-    public List<Seat> listarPorUsuario(@PathVariable String cpf) {
-        return service.buscarPorUsuario(cpf.replaceAll("\\D", ""));
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Seat> listarPorUsuario(
+            @PathVariable String cpf,
+            Authentication authentication
+    ) {
+        authorization.requireSelfOrAdmin(authentication, cpf);
+        if (authorization.isAdmin(authentication)) {
+            return service.buscarPorUsuario(cpf.replaceAll("\\D", ""));
+        }
+        return listar(authentication);
     }
 }

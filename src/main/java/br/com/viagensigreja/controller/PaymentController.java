@@ -1,8 +1,10 @@
 package br.com.viagensigreja.controller;
 
 import br.com.viagensigreja.model.Payment;
-import br.com.viagensigreja.repository.PaymentRepository;
+import br.com.viagensigreja.security.ResourceAuthorizationService;
 import br.com.viagensigreja.service.PaymentService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,36 +14,44 @@ import java.util.List;
 public class PaymentController {
 
     private final PaymentService service;
-    private final PaymentRepository repository;
+    private final ResourceAuthorizationService authorization;
 
-    public PaymentController(PaymentService service, PaymentRepository repository) {
+    public PaymentController(
+            PaymentService service,
+            ResourceAuthorizationService authorization
+    ) {
         this.service = service;
-        this.repository = repository;
+        this.authorization = authorization;
     }
 
     @GetMapping
-    public List<Payment> listar() {
-        return repository.findAll();
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Payment> listar(Authentication authentication) {
+        return service.listarVisiveis(authentication);
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public Payment criar(@RequestBody Payment payment) {
         return service.salvar(payment);
     }
 
     @PutMapping("/bulk")
-    public List<Payment> substituirTodos(@RequestBody List<Payment> payments) {
-        repository.deleteAll();
-        payments.forEach(p -> {
-            if (p.getId() == null || p.getId().isBlank()) {
-                p.setId(p.getUserCpf() + "_" + p.getTripId());
-            }
-        });
-        return repository.saveAll(payments);
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Payment> substituirTodos(
+            @RequestBody List<Payment> payments,
+            Authentication authentication
+    ) {
+        return service.substituirCompativel(payments, authentication);
     }
 
     @GetMapping("/user/{cpf}")
-    public List<Payment> listarPorUsuario(@PathVariable String cpf) {
-        return service.buscarPorUsuario(cpf.replaceAll("\\D", ""));
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public List<Payment> listarPorUsuario(
+            @PathVariable String cpf,
+            Authentication authentication
+    ) {
+        authorization.requireSelfOrAdmin(authentication, cpf);
+        return service.buscarPorUsuarioVisivel(cpf.replaceAll("\\D", ""), authentication);
     }
 }

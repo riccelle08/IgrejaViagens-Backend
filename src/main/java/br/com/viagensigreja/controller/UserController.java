@@ -3,7 +3,6 @@ package br.com.viagensigreja.controller;
 import br.com.viagensigreja.dto.UserResponseDTO;
 import br.com.viagensigreja.mapper.UserMapper;
 import br.com.viagensigreja.model.User;
-import br.com.viagensigreja.repository.UserRepository;
 import br.com.viagensigreja.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,12 +14,10 @@ import java.util.List;
 public class UserController {
 
     private final UserService service;
-    private final UserRepository repository;
     private final UserMapper userMapper;
 
-    public UserController(UserService service, UserRepository repository, UserMapper userMapper) {
+    public UserController(UserService service, UserMapper userMapper) {
         this.service = service;
-        this.repository = repository;
         this.userMapper = userMapper;
     }
 
@@ -48,13 +45,11 @@ public class UserController {
 
     @PutMapping("/bulk")
     public List<UserResponseDTO> substituirTodos(@RequestBody List<User> users) {
-        repository.deleteAll();
-        users.forEach(u -> u.setCpf(u.getCpf().replaceAll("\\D", "")));
-        return userMapper.toResponseList(repository.saveAll(users));
+        return userMapper.toResponseList(service.substituirTodos(users));
     }
 
     @DeleteMapping("/{cpf}")
     public void deletar(@PathVariable String cpf) {
-        repository.deleteById(cpf.replaceAll("\\D", ""));
+        service.deletar(cpf.replaceAll("\\D", ""));
     }
 }

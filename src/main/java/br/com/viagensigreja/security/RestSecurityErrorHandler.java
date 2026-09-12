@@ -30,7 +30,7 @@ public class RestSecurityErrorHandler implements AuthenticationEntryPoint, Acces
             AuthenticationException exception
     ) throws IOException {
         write(response, request, HttpServletResponse.SC_UNAUTHORIZED,
-                "Unauthorized", "AutenticaÃ§Ã£o necessÃ¡ria.");
+                "Unauthorized", "Autenticacao necessaria.");
     }
 
     @Override

@@ -24,22 +24,53 @@ public class PaymentService {
     private final PaymentRepository repository;
     private final ResourceAuthorizationService authorization;
     private final ObjectMapper objectMapper;
+    private final TripMembershipService membership;
 
     public PaymentService(
             PaymentRepository repository,
             ResourceAuthorizationService authorization,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            TripMembershipService membership
     ) {
         this.repository = repository;
         this.authorization = authorization;
         this.objectMapper = objectMapper;
+        this.membership = membership;
     }
 
+    @Transactional
     public Payment salvar(Payment payment) {
-        if (payment.getId() == null || payment.getId().isBlank()) {
-            payment.setId(payment.getUserCpf() + "_" + payment.getTripId());
+        if (payment == null) {
+            throw badRequest("Os dados do pagamento sao obrigatorios.");
         }
-        return repository.save(payment);
+        String cpf = membership.normalizeCpf(payment.getUserCpf());
+        String tripId = requiredText(payment.getTripId(), "Viagem");
+        String id = payment.getId();
+        if (id == null || id.isBlank()) {
+            id = cpf + "_" + tripId;
+        }
+        return salvarComoAdmin(id, payment);
+    }
+
+    @Transactional
+    public Payment atualizarCompativel(
+            String id,
+            Payment payment,
+            Authentication authentication
+    ) {
+        if (id == null || id.isBlank() || payment == null) {
+            throw badRequest("Os dados do pagamento sao obrigatorios.");
+        }
+        if (payment.getId() != null && !payment.getId().isBlank() && !id.equals(payment.getId())) {
+            throw badRequest("O ID do pagamento nao corresponde ao recurso informado.");
+        }
+        if (authorization.isAdmin(authentication)) {
+            return salvarComoAdmin(id, payment);
+        }
+        if (!authorization.isTraveler(authentication)) {
+            throw new AccessDeniedException("Perfil sem permissao para editar pagamentos.");
+        }
+        return atualizarPagamentoDoViajante(id, payment, authentication);
     }
 
     public List<Payment> buscarPorUsuario(String cpf) {
@@ -66,11 +97,97 @@ public class PaymentService {
         return listarVisiveis(authentication);
     }
 
+    private Payment salvarComoAdmin(String id, Payment payment) {
+        Payment existing = repository.findById(id).orElse(null);
+        Payment prepared = prepararPagamentoAdmin(id, payment, existing);
+
+        if (existing != null && (!Objects.equals(existing.getUserCpf(), prepared.getUserCpf())
+                || !Objects.equals(existing.getTripId(), prepared.getTripId()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Um pagamento existente nao pode ser movido para outro viajante ou viagem."
+            );
+        }
+
+        boolean duplicate = repository.findByUserCpfAndTripId(
+                        prepared.getUserCpf(),
+                        prepared.getTripId()
+                ).stream()
+                .anyMatch(current -> !current.getId().equals(id));
+        if (duplicate) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ja existe um pagamento para este viajante nesta viagem."
+            );
+        }
+        return repository.save(prepared);
+    }
+
+    private Payment atualizarPagamentoDoViajante(
+            String id,
+            Payment candidate,
+            Authentication authentication
+    ) {
+        String cpf = authorization.authenticatedCpf(authentication);
+        Set<String> accessibleTripIds = authorization.accessibleTripIds(authentication);
+        validateTravelerIdentity(candidate, cpf, accessibleTripIds);
+
+        List<Payment> matching = repository.findByUserCpfAndTripId(cpf, candidate.getTripId());
+        if (matching.size() > 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ha pagamentos duplicados que precisam ser corrigidos por um administrador."
+            );
+        }
+
+        Payment existing = matching.isEmpty() ? null : matching.get(0);
+        if (existing != null && !existing.getId().equals(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "O ID informado nao corresponde ao pagamento desta viagem."
+            );
+        }
+        if (existing == null) {
+            String expectedId = cpf + "_" + candidate.getTripId();
+            if (!expectedId.equals(id)) {
+                throw badRequest("O ID de um novo pagamento e invalido.");
+            }
+        }
+
+        Payment prepared = mergeTravelerPayment(existing, candidate, cpf);
+        return repository.save(prepared);
+    }
+
+    private Payment prepararPagamentoAdmin(String id, Payment payment, Payment existing) {
+        String tripId = requiredText(payment.getTripId(), "Viagem");
+        String cpf = membership.requireTraveler(tripId, payment.getUserCpf());
+        validatePlan(
+                payment.getTotalInstallments(),
+                payment.getDueDay(),
+                payment.getPaidInstallments()
+        );
+        String receiptsJson = mergeAdminReceipts(
+                existing == null ? null : existing.getReceiptsJson(),
+                payment.getReceiptsJson(),
+                payment.getTotalInstallments()
+        );
+        return new Payment(
+                id,
+                cpf,
+                tripId,
+                payment.getTotalInstallments(),
+                payment.getPaidInstallments(),
+                payment.getDueDay(),
+                payment.isLocked(),
+                receiptsJson
+        );
+    }
+
     /**
-     * MantÃ©m o contrato bulk usado pelo React atual. Para ADMIN a semÃ¢ntica
-     * legada de substituiÃ§Ã£o integral Ã© preservada. Para TRAVELER o mesmo
-     * endpoint funciona apenas como upsert dos prÃ³prios registros, sem excluir
-     * pagamentos omitidos e sem permitir alteraÃ§Ã£o de campos administrativos.
+     * Mantem o contrato bulk usado pelo React atual. Para ADMIN a semantica
+     * legada de substituicao integral e preservada. Para TRAVELER o mesmo
+     * endpoint funciona apenas como upsert dos proprios registros, sem excluir
+     * pagamentos omitidos e sem permitir alteracao de campos administrativos.
      */
     @Transactional
     public List<Payment> substituirCompativel(
@@ -81,19 +198,41 @@ public class PaymentService {
             return substituirTodosComoAdmin(payments);
         }
         if (!authorization.isTraveler(authentication)) {
-            throw new AccessDeniedException("Perfil sem permissÃ£o para editar pagamentos.");
+            throw new AccessDeniedException("Perfil sem permissao para editar pagamentos.");
         }
         return atualizarPagamentosDoViajante(payments, authentication);
     }
 
     private List<Payment> substituirTodosComoAdmin(List<Payment> payments) {
-        repository.deleteAll();
-        payments.forEach(payment -> {
-            if (payment.getId() == null || payment.getId().isBlank()) {
-                payment.setId(payment.getUserCpf() + "_" + payment.getTripId());
+        if (payments == null) {
+            throw badRequest("A lista de pagamentos e obrigatoria.");
+        }
+        List<Payment> prepared = new ArrayList<>();
+        Set<String> ids = new java.util.HashSet<>();
+        Set<String> travelerTrips = new java.util.HashSet<>();
+        for (Payment payment : payments) {
+            if (payment == null) {
+                throw badRequest("A lista de pagamentos possui um item vazio.");
             }
-        });
-        return repository.saveAll(payments);
+            String cpf = membership.normalizeCpf(payment.getUserCpf());
+            String tripId = requiredText(payment.getTripId(), "Viagem");
+            String id = payment.getId();
+            if (id == null || id.isBlank()) {
+                id = cpf + "_" + tripId;
+            }
+            Payment normalized = prepararPagamentoAdmin(id, payment, null);
+            if (!ids.add(id)) {
+                throw badRequest("A lista possui IDs de pagamento duplicados.");
+            }
+            if (!travelerTrips.add(normalized.getUserCpf() + "\n" + normalized.getTripId())) {
+                throw badRequest("A lista possui pagamentos duplicados para um viajante e viagem.");
+            }
+            prepared.add(normalized);
+        }
+
+        repository.deleteAll();
+        repository.flush();
+        return repository.saveAll(prepared);
     }
 
     private List<Payment> atualizarPagamentosDoViajante(
@@ -119,7 +258,7 @@ public class PaymentService {
             if (matching.size() > 1) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "HÃ¡ pagamentos duplicados que precisam ser corrigidos por um administrador."
+                        "Ha pagamentos duplicados que precisam ser corrigidos por um administrador."
                 );
             }
 
@@ -147,7 +286,7 @@ public class PaymentService {
                 || candidate.getTripId() == null
                 || !accessibleTripIds.contains(candidate.getTripId())) {
             throw new AccessDeniedException(
-                    "Viajantes sÃ³ podem editar o prÃ³prio pagamento em viagens associadas."
+                    "Viajantes so podem editar o proprio pagamento em viagens associadas."
             );
         }
     }
@@ -211,8 +350,71 @@ public class PaymentService {
         if (dueDay < 1 || dueDay > 31) {
             throw badRequest("O dia de vencimento deve estar entre 1 e 31.");
         }
-        if (totalInstallments < paidInstallments) {
-            throw badRequest("O total de parcelas nÃ£o pode ser menor que as parcelas jÃ¡ pagas.");
+        if (paidInstallments < 0 || totalInstallments < paidInstallments) {
+            throw badRequest("O total de parcelas nao pode ser menor que as parcelas ja pagas.");
+        }
+    }
+
+    private String mergeAdminReceipts(
+            String storedJson,
+            String submittedJson,
+            int totalInstallments
+    ) {
+        Map<String, Object> stored = parseJsonObject(storedJson, true);
+        Map<String, Object> submitted = parseJsonObject(submittedJson, false);
+        Map<String, Object> merged = new LinkedHashMap<>(stored);
+
+        for (Map.Entry<String, Object> entry : submitted.entrySet()) {
+            Map<String, Object> nextReceipt = asObject(entry.getValue());
+            if (nextReceipt == null) {
+                throw badRequest("O comprovante enviado possui formato invalido.");
+            }
+            validateReceiptNumber(entry.getKey(), totalInstallments);
+            Map<String, Object> currentReceipt = asObject(stored.get(entry.getKey()));
+            Map<String, Object> next = currentReceipt == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(currentReceipt);
+            next.putAll(nextReceipt);
+            validateAdminReceipt(next);
+            merged.put(entry.getKey(), next);
+        }
+
+        for (Map.Entry<String, Object> entry : merged.entrySet()) {
+            validateReceiptNumber(entry.getKey(), totalInstallments);
+            Map<String, Object> receipt = asObject(entry.getValue());
+            if (receipt == null) {
+                throw badRequest("O comprovante persistido possui formato invalido.");
+            }
+            validateAdminReceipt(receipt);
+        }
+
+        try {
+            return objectMapper.writeValueAsString(merged);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Nao foi possivel serializar os comprovantes.", exception);
+        }
+    }
+
+    private void validateReceiptNumber(String installment, int totalInstallments) {
+        int installmentNumber;
+        try {
+            installmentNumber = Integer.parseInt(installment);
+        } catch (NumberFormatException exception) {
+            throw badRequest("O numero da parcela do comprovante e invalido.");
+        }
+        if (installmentNumber < 1 || installmentNumber > totalInstallments) {
+            throw badRequest("O comprovante nao pertence a uma parcela valida do plano.");
+        }
+    }
+
+    private void validateAdminReceipt(Map<String, Object> receipt) {
+        if (!(receipt.get("data") instanceof String data) || data.isBlank()) {
+            throw badRequest("O conteudo do comprovante e obrigatorio.");
+        }
+        Object status = receipt.get("status");
+        if (!(status instanceof String value)
+                || !Set.of("pending", "approved", "rejected").contains(value)) {
+            throw badRequest("O status do comprovante e invalido.");
         }
     }
 
@@ -229,7 +431,7 @@ public class PaymentService {
         for (Map.Entry<String, Object> entry : submitted.entrySet()) {
             Map<String, Object> nextReceipt = asObject(entry.getValue());
             if (nextReceipt == null) {
-                throw badRequest("O comprovante enviado possui formato invÃ¡lido.");
+                throw badRequest("O comprovante enviado possui formato invalido.");
             }
 
             Map<String, Object> currentReceipt = asObject(stored.get(entry.getKey()));
@@ -237,7 +439,7 @@ public class PaymentService {
                 if (stored.containsKey(entry.getKey())) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
-                            "Um comprovante persistido exige revisÃ£o administrativa."
+                            "Um comprovante persistido exige revisao administrativa."
                     );
                 }
                 validateReceiptUpload(entry.getKey(), nextReceipt, totalInstallments, locked);
@@ -262,7 +464,7 @@ public class PaymentService {
         try {
             return objectMapper.writeValueAsString(merged);
         } catch (Exception exception) {
-            throw new IllegalStateException("NÃ£o foi possÃ­vel serializar os comprovantes.", exception);
+            throw new IllegalStateException("Nao foi possivel serializar os comprovantes.", exception);
         }
     }
 
@@ -276,13 +478,13 @@ public class PaymentService {
         try {
             installmentNumber = Integer.parseInt(installment);
         } catch (NumberFormatException exception) {
-            throw badRequest("O nÃºmero da parcela do comprovante Ã© invÃ¡lido.");
+            throw badRequest("O numero da parcela do comprovante e invalido.");
         }
         if (!locked || installmentNumber < 1 || installmentNumber > totalInstallments) {
-            throw badRequest("O comprovante nÃ£o pertence a uma parcela vÃ¡lida do plano.");
+            throw badRequest("O comprovante nao pertence a uma parcela valida do plano.");
         }
         if (!(receipt.get("data") instanceof String data) || data.isBlank()) {
-            throw badRequest("O conteÃºdo do comprovante Ã© obrigatÃ³rio.");
+            throw badRequest("O conteudo do comprovante e obrigatorio.");
         }
     }
 
@@ -299,16 +501,16 @@ public class PaymentService {
                 return result;
             }
         } catch (Exception ignored) {
-            // A mensagem abaixo distingue dado persistido inconsistente de entrada invÃ¡lida.
+            // A mensagem abaixo distingue dado persistido inconsistente de entrada invalida.
         }
 
         if (storedValue) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Os comprovantes persistidos estÃ£o invÃ¡lidos e exigem revisÃ£o administrativa."
+                    "Os comprovantes persistidos estao invalidos e exigem revisao administrativa."
             );
         }
-        throw badRequest("O JSON de comprovantes enviado Ã© invÃ¡lido.");
+        throw badRequest("O JSON de comprovantes enviado e invalido.");
     }
 
     private Map<String, Object> asObject(Object value) {
@@ -343,6 +545,13 @@ public class PaymentService {
     ) {
         return List.of("data", "date", "filename", "fileName", "type").stream()
                 .anyMatch(field -> !Objects.equals(current.get(field), submitted.get(field)));
+    }
+
+    private String requiredText(String value, String label) {
+        if (value == null || value.isBlank()) {
+            throw badRequest(label + " e obrigatoria.");
+        }
+        return value.trim();
     }
 
     private ResponseStatusException badRequest(String message) {

@@ -35,12 +35,12 @@ public class ResourceAuthorizationService {
 
     public String authenticatedCpf(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AccessDeniedException("UsuÃ¡rio nÃ£o autenticado.");
+            throw new AccessDeniedException("Usuario nao autenticado.");
         }
 
         String cpf = normalizeCpf(authentication.getName());
         if (cpf.isBlank()) {
-            throw new AccessDeniedException("Identidade autenticada invÃ¡lida.");
+            throw new AccessDeniedException("Identidade autenticada invalida.");
         }
         return cpf;
     }
@@ -48,13 +48,13 @@ public class ResourceAuthorizationService {
     public void requireSelfOrAdmin(Authentication authentication, String requestedCpf) {
         if (!isAdmin(authentication)
                 && !authenticatedCpf(authentication).equals(normalizeCpf(requestedCpf))) {
-            throw new AccessDeniedException("O recurso pertence a outro usuÃ¡rio.");
+            throw new AccessDeniedException("O recurso pertence a outro usuario.");
         }
     }
 
     public void requireTripAccess(Authentication authentication, String tripId) {
         if (!isAdmin(authentication) && !canAccessTrip(authentication, tripId)) {
-            throw new AccessDeniedException("A viagem nÃ£o pertence ao usuÃ¡rio autenticado.");
+            throw new AccessDeniedException("A viagem nao pertence ao usuario autenticado.");
         }
     }
 
@@ -125,7 +125,7 @@ public class ResourceAuthorizationService {
                 }
             }
         } catch (Exception ignored) {
-            // Fail closed: JSON legado invÃ¡lido nunca concede acesso ao viajante.
+            // Fail closed: JSON legado invalido nunca concede acesso ao viajante.
         }
         return false;
     }

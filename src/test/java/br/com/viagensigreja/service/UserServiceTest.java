@@ -1,6 +1,10 @@
 package br.com.viagensigreja.service;
 
 import br.com.viagensigreja.model.User;
+import br.com.viagensigreja.repository.PaymentRepository;
+import br.com.viagensigreja.repository.RoomRepository;
+import br.com.viagensigreja.repository.SeatRepository;
+import br.com.viagensigreja.repository.TripRepository;
 import br.com.viagensigreja.repository.UserRepository;
 import br.com.viagensigreja.security.LegacyCompatiblePasswordEncoder;
 import org.junit.jupiter.api.Test;
@@ -16,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import tools.jackson.databind.ObjectMapper;
 
 class UserServiceTest {
 
@@ -24,7 +29,7 @@ class UserServiceTest {
     @Test
     void atualizarSemPasswordPreservaSenhaExistente() {
         UserRepository repository = mock(UserRepository.class);
-        UserService service = new UserService(repository, passwordEncoder);
+        UserService service = service(repository);
         String hashExistente = passwordEncoder.encode("senha-existente");
         User existente = usuario(hashExistente, "Nome antigo");
         User atualizacao = usuario(null, "Nome atualizado");
@@ -42,7 +47,7 @@ class UserServiceTest {
     @Test
     void atualizarComNovaSenhaArmazenaHash() {
         UserRepository repository = mock(UserRepository.class);
-        UserService service = new UserService(repository, passwordEncoder);
+        UserService service = service(repository);
         User existente = usuario("senha-existente", "Nome antigo");
         User atualizacao = usuario("nova-senha", "Nome atualizado");
 
@@ -58,12 +63,12 @@ class UserServiceTest {
     @Test
     void criarUsuarioArmazenaSenhaComHash() {
         UserRepository repository = mock(UserRepository.class);
-        UserService service = new UserService(repository, passwordEncoder);
+        UserService service = service(repository);
         User novoUsuario = usuario("senha-inicial", "Novo usuário");
 
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        User salvo = service.salvar(novoUsuario);
+        User salvo = service.criar(novoUsuario);
 
         assertNotEquals("senha-inicial", salvo.getPassword());
         assertTrue(passwordEncoder.matches("senha-inicial", salvo.getPassword()));
@@ -71,7 +76,7 @@ class UserServiceTest {
 
     private User usuario(String password, String name) {
         return new User(
-                "cpf-do-corpo",
+                "52998224725",
                 name,
                 password,
                 "traveler",
@@ -81,6 +86,18 @@ class UserServiceTest {
                 null,
                 false,
                 List.of()
+        );
+    }
+
+    private UserService service(UserRepository repository) {
+        return new UserService(
+                repository,
+                passwordEncoder,
+                mock(TripRepository.class),
+                mock(PaymentRepository.class),
+                mock(SeatRepository.class),
+                mock(RoomRepository.class),
+                new ObjectMapper()
         );
     }
 }

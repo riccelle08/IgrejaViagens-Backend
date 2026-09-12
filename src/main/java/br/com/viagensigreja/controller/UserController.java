@@ -45,8 +45,7 @@ public class UserController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public UserResponseDTO criar(@RequestBody User user) {
-        user.setCpf(user.getCpf().replaceAll("\\D", ""));
-        return userMapper.toResponse(service.salvar(user));
+        return userMapper.toResponse(service.criar(user));
     }
 
     @PutMapping("/{cpf}")

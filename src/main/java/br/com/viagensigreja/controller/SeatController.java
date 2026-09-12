@@ -49,16 +49,22 @@ public class SeatController {
         return service.salvar(seat);
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Seat atualizar(@PathVariable String id, @RequestBody Seat seat) {
+        return service.atualizar(id, seat);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public void deletar(@PathVariable String id, @RequestParam String tripId) {
+        service.deletar(id, tripId);
+    }
+
     @PutMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
     public List<Seat> substituirTodos(@RequestBody List<Seat> seats) {
-        repository.deleteAll();
-        seats.forEach(s -> {
-            if (s.getId() == null || s.getId().isBlank()) {
-                s.setId(s.getTripId() + "_" + s.getBusId() + "_" + s.getUserCpf() + "_" + s.getSeatNumber());
-            }
-        });
-        return repository.saveAll(seats);
+        return service.substituirTodos(seats);
     }
 
     @GetMapping("/trip/{tripId}")

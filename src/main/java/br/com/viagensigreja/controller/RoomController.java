@@ -56,16 +56,22 @@ public class RoomController {
         return service.salvar(room);
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Room atualizar(@PathVariable String id, @RequestBody Room room) {
+        return service.atualizar(id, room);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public void deletar(@PathVariable String id, @RequestParam String tripId) {
+        service.deletar(id, tripId);
+    }
+
     @PutMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
     public List<Room> substituirTodos(@RequestBody List<Room> rooms) {
-        repository.deleteAll();
-        rooms.forEach(r -> {
-            if (r.getId() == null || r.getId().isBlank()) {
-                r.setId((r.getTripId() == null ? "room" : r.getTripId()) + "_" + System.currentTimeMillis());
-            }
-        });
-        return repository.saveAll(rooms);
+        return service.substituirTodos(rooms);
     }
 
     @GetMapping("/trip/{tripId}")

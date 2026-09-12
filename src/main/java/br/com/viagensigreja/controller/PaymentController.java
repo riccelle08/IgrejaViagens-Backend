@@ -36,6 +36,16 @@ public class PaymentController {
         return service.salvar(payment);
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
+    public Payment atualizar(
+            @PathVariable String id,
+            @RequestBody Payment payment,
+            Authentication authentication
+    ) {
+        return service.atualizarCompativel(id, payment, authentication);
+    }
+
     @PutMapping("/bulk")
     @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
     public List<Payment> substituirTodos(

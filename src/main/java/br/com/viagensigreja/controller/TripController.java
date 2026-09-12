@@ -1,8 +1,10 @@
 package br.com.viagensigreja.controller;
 
+import br.com.viagensigreja.dto.UserResponseDTO;
 import br.com.viagensigreja.mapper.TravelerResourceMapper;
+import br.com.viagensigreja.mapper.UserMapper;
 import br.com.viagensigreja.model.Trip;
-import br.com.viagensigreja.repository.TripRepository;
+import br.com.viagensigreja.model.User;
 import br.com.viagensigreja.security.ResourceAuthorizationService;
 import br.com.viagensigreja.service.TripService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,20 +18,20 @@ import java.util.List;
 public class TripController {
 
     private final TripService service;
-    private final TripRepository repository;
     private final ResourceAuthorizationService authorization;
     private final TravelerResourceMapper travelerMapper;
+    private final UserMapper userMapper;
 
     public TripController(
             TripService service,
-            TripRepository repository,
             ResourceAuthorizationService authorization,
-            TravelerResourceMapper travelerMapper
+            TravelerResourceMapper travelerMapper,
+            UserMapper userMapper
     ) {
         this.service = service;
-        this.repository = repository;
         this.authorization = authorization;
         this.travelerMapper = travelerMapper;
+        this.userMapper = userMapper;
     }
 
     @GetMapping
@@ -49,11 +51,11 @@ public class TripController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TRAVELER')")
     public Object buscar(@PathVariable String id, Authentication authentication) {
         if (authorization.isAdmin(authentication)) {
-            return repository.findById(id).orElse(null);
+            return service.buscar(id);
         }
 
         authorization.requireTripAccess(authentication, id);
-        return repository.findById(id)
+        return service.buscarOptional(id)
                 .map(trip -> travelerMapper.toTripResponse(
                         trip,
                         authorization.authenticatedCpf(authentication)
@@ -70,20 +72,39 @@ public class TripController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public Trip atualizar(@PathVariable String id, @RequestBody Trip trip) {
-        trip.setId(id);
-        return service.salvar(trip);
+        return service.atualizar(id, trip);
     }
 
     @PutMapping("/bulk")
     @PreAuthorize("hasRole('ADMIN')")
     public List<Trip> substituirTodos(@RequestBody List<Trip> trips) {
-        repository.deleteAll();
-        return repository.saveAll(trips);
+        return service.substituirTodos(trips);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public void deletar(@PathVariable String id) {
-        repository.deleteById(id);
+        service.deletar(id);
+    }
+
+    @PutMapping("/{id}/travelers/{cpf}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Trip adicionarViajante(@PathVariable String id, @PathVariable String cpf) {
+        return service.adicionarViajante(id, cpf);
+    }
+
+    @PostMapping("/{id}/travelers")
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponseDTO criarViajante(
+            @PathVariable String id,
+            @RequestBody User user
+    ) {
+        return userMapper.toResponse(service.criarViajante(id, user));
+    }
+
+    @DeleteMapping("/{id}/travelers/{cpf}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Trip removerViajante(@PathVariable String id, @PathVariable String cpf) {
+        return service.removerViajante(id, cpf);
     }
 }

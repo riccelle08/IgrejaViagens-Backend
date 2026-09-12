@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -119,7 +120,7 @@ class AuthSecurityIntegrationTest {
                 autenticar("senha-segura").andReturn()
         );
 
-        mockMvc.perform(post("/auth/logout").session(session))
+        mockMvc.perform(post("/auth/logout").session(session).with(csrf()))
                 .andExpect(status().isNoContent());
 
         assertTrue(session.isInvalid());
@@ -131,6 +132,19 @@ class AuthSecurityIntegrationTest {
     void usuarioNaoAutenticadoNaoAcessaEndpointProtegido() throws Exception {
         mockMvc.perform(get("/trips"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void csrfTokenPublicoProtegeOperacoesDeEscrita() throws Exception {
+        mockMvc.perform(get("/auth/csrf"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.headerName").value("X-CSRF-TOKEN"))
+                .andExpect(jsonPath("$.token").isNotEmpty());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cpf\":\"52998224725\",\"password\":\"senha\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -208,7 +222,7 @@ class AuthSecurityIntegrationTest {
     }
 
     private org.springframework.test.web.servlet.ResultActions autenticar(String password) throws Exception {
-        return mockMvc.perform(post("/auth/login")
+        return mockMvc.perform(post("/auth/login").with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {

@@ -71,7 +71,7 @@ public class TravelerResourceMapper {
         try {
             return objectMapper.writeValueAsString(List.of(cpf));
         } catch (Exception exception) {
-            throw new IllegalStateException("NÃ£o foi possÃ­vel montar a resposta da viagem.", exception);
+            throw new IllegalStateException("Nao foi possivel montar a resposta da viagem.", exception);
         }
     }
 }

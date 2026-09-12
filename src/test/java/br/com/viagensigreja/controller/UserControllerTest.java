@@ -49,7 +49,7 @@ class UserControllerTest {
 
     @Test
     void criarUsuarioNaoExpoePassword() throws Exception {
-        when(userService.salvar(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.criar(any(User.class))).thenReturn(usuarioComSenha());
 
         mockMvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)

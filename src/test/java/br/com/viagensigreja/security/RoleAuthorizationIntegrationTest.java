@@ -27,12 +27,15 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -151,10 +154,11 @@ class RoleAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(2));
 
         Payment replacement = payment(
-                "admin-replacement", ADMIN_CPF, OWN_TRIP, 2, 1, true, "{}"
+                "admin-replacement", TRAVELER_CPF, OWN_TRIP, 2, 1, true, "{}"
         );
         mockMvc.perform(put("/payments/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(List.of(replacement))))
                 .andExpect(status().isOk())
@@ -174,31 +178,37 @@ class RoleAuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.status").value(403));
         mockMvc.perform(post("/trips")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(trip("new-trip", "Nova", "[]"))))
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/trips/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[]"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/rooms/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[]"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/seats/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[]"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/users/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("[]"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/payments")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(payment(
                                 "forged", TRAVELER_CPF, OWN_TRIP, 1, 0, false, "{}"
@@ -206,22 +216,25 @@ class RoleAuthorizationIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/rooms")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(new Room())))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/seats")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(new Seat())))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/buses")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(new Bus())))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(delete("/users/{cpf}", OTHER_CPF).session(session))
+        mockMvc.perform(delete("/users/{cpf}", OTHER_CPF).session(session).with(csrf()))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(delete("/trips/{id}", OTHER_TRIP).session(session))
+        mockMvc.perform(delete("/trips/{id}", OTHER_TRIP).session(session).with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -288,6 +301,7 @@ class RoleAuthorizationIntegrationTest {
 
         mockMvc.perform(put("/payments/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(malicious)))
                 .andExpect(status().isForbidden());
@@ -309,7 +323,7 @@ class RoleAuthorizationIntegrationTest {
                 """
                 {
                   "1":{"data":"approved-data","filename":"approved.pdf","status":"approved","note":"ok","adminField":"keep"},
-                  "2":{"data":"old-data","filename":"old.pdf","status":"rejected","note":"ilegÃ­vel","adminField":"keep"}
+                  "2":{"data":"old-data","filename":"old.pdf","status":"rejected","note":"ilegivel","adminField":"keep"}
                 }
                 """
         );
@@ -332,6 +346,7 @@ class RoleAuthorizationIntegrationTest {
 
         mockMvc.perform(put("/payments/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(List.of(submitted))))
                 .andExpect(status().isOk())
@@ -369,6 +384,7 @@ class RoleAuthorizationIntegrationTest {
 
         mockMvc.perform(put("/payments/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(List.of(submitted))))
                 .andExpect(status().isOk())
@@ -394,6 +410,7 @@ class RoleAuthorizationIntegrationTest {
         );
         mockMvc.perform(put("/users/{cpf}", TRAVELER_CPF)
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(maliciousBody)))
                 .andExpect(status().isOk())
@@ -411,6 +428,7 @@ class RoleAuthorizationIntegrationTest {
 
         mockMvc.perform(put("/users/{cpf}", TRAVELER_CPF)
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(maliciousBody)))
                 .andExpect(status().isForbidden());
@@ -432,13 +450,312 @@ class RoleAuthorizationIntegrationTest {
                 )));
         mockMvc.perform(put("/payments/bulk")
                         .session(session)
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(List.of(candidate))))
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void healthCheckIsPublicAndConfirmsDatabaseConnection() throws Exception {
+        mockMvc.perform(get("/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void granularPaymentUpdatePreservesOtherPaymentsAndServerReceiptMetadata() throws Exception {
+        Payment existing = payment(
+                "pay-own",
+                TRAVELER_CPF,
+                OWN_TRIP,
+                4,
+                1,
+                true,
+                """
+                {"1":{"data":"receipt-data","status":"pending","providerChecksum":"keep"}}
+                """
+        );
+        paymentRepository.saveAndFlush(existing);
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        Payment update = payment(
+                "pay-own",
+                TRAVELER_CPF,
+                OWN_TRIP,
+                4,
+                2,
+                true,
+                """
+                {"1":{"data":"receipt-data","status":"approved","note":"ok"}}
+                """
+        );
+
+        mockMvc.perform(put("/payments/{id}", "pay-own")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(update)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paidInstallments").value(2));
+
+        assertTrue(paymentRepository.existsById("pay-other"));
+        Map<?, ?> receipts = objectMapper.readValue(
+                paymentRepository.findById("pay-own").orElseThrow().getReceiptsJson(),
+                Map.class
+        );
+        Map<?, ?> receipt = (Map<?, ?>) receipts.get("1");
+        assertEquals("approved", receipt.get("status"));
+        assertEquals("keep", receipt.get("providerChecksum"));
+    }
+
+    @Test
+    void granularTravelerPaymentUpdateCannotForgeAdministrativeFields() throws Exception {
+        MockHttpSession session = login(TRAVELER_CPF, "legacy-secret");
+        Payment submitted = payment(
+                "pay-own", TRAVELER_CPF, OWN_TRIP, 2, 2, false, "{}"
+        );
+        submitted.setDueDay(25);
+
+        mockMvc.perform(put("/payments/{id}", "pay-own")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(submitted)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalInstallments").value(4))
+                .andExpect(jsonPath("$.paidInstallments").value(1))
+                .andExpect(jsonPath("$.dueDay").value(10))
+                .andExpect(jsonPath("$.locked").value(true));
+
+        assertTrue(paymentRepository.existsById("pay-other"));
+    }
+
+    @Test
+    void granularRoomUpdatePreservesOthersAndRejectsInvalidOccupancy() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        Room update = new Room(
+                "room-own",
+                "double",
+                2,
+                "Quarto atualizado",
+                "hotel-1",
+                List.of(TRAVELER_CPF, COMPANION_CPF),
+                OWN_TRIP
+        );
+
+        mockMvc.perform(put("/rooms/{id}", "room-own")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(update)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Quarto atualizado"));
+
+        assertTrue(roomRepository.existsById("room-other"));
+
+        Room overCapacity = new Room(
+                "room-own",
+                "single",
+                1,
+                "Quarto invalido",
+                "hotel-1",
+                List.of(TRAVELER_CPF, COMPANION_CPF),
+                OWN_TRIP
+        );
+        mockMvc.perform(put("/rooms/{id}", "room-own")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(overCapacity)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "A quantidade de ocupantes excede a capacidade do quarto."
+                ));
+    }
+
+    @Test
+    void granularSeatCommandsRejectDoubleBookingAndDeleteOnlyTheTarget() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        Seat duplicate = new Seat(
+                "seat-duplicate", OWN_TRIP, "bus-own", 1, 7, COMPANION_CPF
+        );
+
+        mockMvc.perform(put("/seats/{id}", "seat-duplicate")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(duplicate)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Este assento ja esta ocupado."));
+
+        mockMvc.perform(delete("/seats/{id}", "seat-own")
+                        .queryParam("tripId", OWN_TRIP)
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        assertFalse(seatRepository.existsById("seat-own"));
+        assertTrue(seatRepository.existsById("seat-other"));
+    }
+
+    @Test
+    void deletingTripCascadesDependentResourcesInBackend() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+
+        mockMvc.perform(delete("/trips/{id}", OWN_TRIP).session(session).with(csrf()))
+                .andExpect(status().isOk());
+
+        assertFalse(tripRepository.existsById(OWN_TRIP));
+        assertFalse(paymentRepository.existsById("pay-own"));
+        assertFalse(seatRepository.existsById("seat-own"));
+        assertFalse(roomRepository.existsById("room-own"));
+        assertFalse(busRepository.existsById("bus-own"));
+        assertTrue(tripRepository.existsById(OTHER_TRIP));
+        assertTrue(paymentRepository.existsById("pay-other"));
+    }
+
+    @Test
+    void deletingUserCleansAllAssociationsAndKeepsOtherUsersData() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+
+        mockMvc.perform(delete("/users/{cpf}", TRAVELER_CPF).session(session).with(csrf()))
+                .andExpect(status().isOk());
+
+        assertFalse(userRepository.existsById(TRAVELER_CPF));
+        assertFalse(paymentRepository.existsById("pay-own"));
+        assertFalse(seatRepository.existsById("seat-own"));
+        assertFalse(tripRepository.findById(OWN_TRIP).orElseThrow()
+                .getTravelersJson().contains(TRAVELER_CPF));
+        assertFalse(roomRepository.findById("room-own").orElseThrow()
+                .getOccupants().contains(TRAVELER_CPF));
+        assertTrue(userRepository.existsById(OTHER_CPF));
+        assertTrue(paymentRepository.existsById("pay-other"));
+    }
+
+    @Test
+    void lastAdministratorCannotBeDeleted() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+
+        mockMvc.perform(delete("/users/{cpf}", ADMIN_CPF).session(session).with(csrf()))
+                .andExpect(status().isConflict());
+
+        assertTrue(userRepository.existsById(ADMIN_CPF));
+    }
+
+    @Test
+    void lastAdministratorCannotLoseAdminRole() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        User demoted = user(ADMIN_CPF, "Administrador", null, "traveler", false);
+
+        mockMvc.perform(put("/users/{cpf}", ADMIN_CPF)
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(demoted)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "O ultimo administrador do sistema nao pode perder esse perfil."
+                ));
+
+        assertEquals("admin", userRepository.findById(ADMIN_CPF).orElseThrow().getRole());
+    }
+
+    @Test
+    void adminAddsAndRemovesTravelerWithDependentDataAtomically() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+
+        mockMvc.perform(put("/trips/{id}/travelers/{cpf}", OWN_TRIP, OTHER_CPF)
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        assertTrue(tripRepository.findById(OWN_TRIP).orElseThrow()
+                .getTravelersJson().contains(OTHER_CPF));
+        assertTrue(paymentRepository.findFirstByUserCpfAndTripId(OTHER_CPF, OWN_TRIP)
+                .isPresent());
+
+        mockMvc.perform(delete("/trips/{id}/travelers/{cpf}", OWN_TRIP, TRAVELER_CPF)
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        assertTrue(userRepository.existsById(TRAVELER_CPF));
+        assertFalse(paymentRepository.existsById("pay-own"));
+        assertFalse(seatRepository.existsById("seat-own"));
+        assertFalse(roomRepository.findById("room-own").orElseThrow()
+                .getOccupants().contains(TRAVELER_CPF));
+    }
+
+    @Test
+    void adminCreatesAndAssociatesTravelerInOneRequest() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        User newTraveler = user(
+                "93541134780",
+                "Novo viajante",
+                "temporary-secret",
+                "admin",
+                false
+        );
+
+        mockMvc.perform(post("/trips/{id}/travelers", OWN_TRIP)
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(newTraveler)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cpf").value("93541134780"))
+                .andExpect(jsonPath("$.role").value("traveler"))
+                .andExpect(jsonPath("$.firstLogin").value(true))
+                .andExpect(jsonPath("$.password").doesNotExist());
+
+        assertTrue(tripRepository.findById(OWN_TRIP).orElseThrow()
+                .getTravelersJson().contains("93541134780"));
+        assertTrue(paymentRepository.findFirstByUserCpfAndTripId("93541134780", OWN_TRIP)
+                .isPresent());
+    }
+
+    @Test
+    void adminCreatesAndUpdatesTripWithoutBypassingTravelerOperations() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        Trip created = trip("trip-new", "Nova viagem", "[\"" + OTHER_CPF + "\"]");
+
+        mockMvc.perform(post("/trips")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(created)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("trip-new"))
+                .andExpect(jsonPath("$.travelersJson").value("[]"));
+
+        Trip update = trip(OWN_TRIP, "Viagem atualizada", "[]");
+        mockMvc.perform(put("/trips/{id}", OWN_TRIP)
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(update)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Viagem atualizada"))
+                .andExpect(jsonPath("$.travelersJson")
+                        .value("[\"" + TRAVELER_CPF + "\",\"" + COMPANION_CPF + "\"]"));
+    }
+
+    @Test
+    void invalidCpfIsRejectedWithUsefulJsonMessage() throws Exception {
+        MockHttpSession session = login(ADMIN_CPF, "admin-secret");
+        User invalid = user("11111111111", "CPF invalido", "temporary-secret", "traveler", true);
+
+        mockMvc.perform(post("/users")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(invalid)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("CPF invalido."));
+    }
+
     private MockHttpSession login(String cpf, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cpf":"%s","password":"%s"}
@@ -469,6 +786,14 @@ class RoleAuthorizationIntegrationTest {
         Trip trip = new Trip();
         trip.setId(id);
         trip.setName(name);
+        trip.setDestination("Destino");
+        trip.setDeparturePlace("Origem");
+        trip.setDepartureTime("08:00");
+        trip.setDate(LocalDate.of(2027, 1, 20));
+        trip.setMaxPeople(44);
+        trip.setPrice(100.0);
+        trip.setArrecadationGoal(4400.0);
+        trip.setRules("");
         trip.setTravelersJson(travelersJson);
         trip.setBusesJson("[]");
         trip.setHotelsJson("[]");

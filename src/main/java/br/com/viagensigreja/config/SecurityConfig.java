@@ -2,6 +2,7 @@ package br.com.viagensigreja.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
@@ -21,6 +22,8 @@ import org.springframework.security.web.authentication.session.ChangeSessionIdAu
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 @EnableWebSecurity
@@ -52,12 +55,25 @@ public class SecurityConfig {
             HttpSecurity http,
             SecurityContextRepository securityContextRepository,
             AuthenticationEntryPoint authenticationEntryPoint,
-            AccessDeniedHandler accessDeniedHandler
+            AccessDeniedHandler accessDeniedHandler,
+            @Value("${server.servlet.session.cookie.secure:false}") boolean secureCookie,
+            @Value("${server.servlet.session.cookie.same-site:strict}") String sameSite
     ) throws Exception {
+        CookieCsrfTokenRepository csrfTokenRepository = new CookieCsrfTokenRepository();
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie
+                .httpOnly(true)
+                .path("/")
+                .sameSite(sameSite)
+                .secure(secureCookie)
+        );
+        CsrfTokenRequestAttributeHandler csrfTokenHandler =
+                new CsrfTokenRequestAttributeHandler();
+
         http
-                // TODO Etapa 9A/10: ativar CSRF com token consumido pelo React.
-                // O cliente atual não envia token nas operações de escrita.
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(csrfTokenHandler)
+                )
                 .cors(Customizer.withDefaults())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
@@ -76,6 +92,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/csrf", "/health").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         // As regras de perfil e propriedade ficam nos controllers via method security.

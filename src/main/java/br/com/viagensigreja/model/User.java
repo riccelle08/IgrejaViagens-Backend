@@ -16,6 +16,8 @@ public class User {
     private String cpf;
 
     private String name;
+
+    @ToString.Exclude
     private String password;
     private String role;
     private String birthdate;

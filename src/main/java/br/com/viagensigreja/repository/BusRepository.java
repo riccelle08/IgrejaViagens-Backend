@@ -9,4 +9,6 @@ public interface BusRepository extends JpaRepository<Bus, String> {
 
     List<Bus> findByTripId(String tripId);
 
+    void deleteByTripId(String tripId);
+
 }
